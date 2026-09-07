@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>База Знаний и Расписание | Группа 108М</title>
+    
+    <!-- Шрифты -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Настройка MathJax для формул LaTeX -->
+    <script>
+        window.MathJax = {
+            tex: { 
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true,
+                processEnvironments: true
+            },
+            options: {
+                ignoreHtmlClass: 'tex2jax_ignore',
+                processHtmlClass: 'tex2jax_process'
+            },
+            svg: { fontCache: 'global' },
+            startup: { typeset: false }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <!-- Marked Markdown -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <!-- Mermaid.js -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+    <!-- Highlight.js -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="ambient-glow glow-1"></div>
+    <div class="ambient-glow glow-2"></div>
+
+    <!-- Верхняя панель навигации -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="brand">
+                <span class="group-pill">108М</span>
+                <span class="brand-text">Расписание & База</span>
+            </div>
+
+            <div class="view-switch">
+                <button id="tab-schedule" class="switch-btn active" onclick="app.switchView('schedule')">
+                    <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    Расписание
+                </button>
+                <button id="tab-archive" class="switch-btn" onclick="app.switchView('archive')">
+                    <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                    Все конспекты
+                </button>
+            </div>
+
+            <div class="nav-tools">
+                <button class="today-quick-btn" onclick="app.scrollToToday()" title="Перейти к сегодняшнему дню">
+                    <span class="today-dot"></span>
+                    <span>Сегодня</span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Основной контейнер -->
+    <main class="main-wrapper">
+        <header class="hero-section fade-in">
+            <div class="hero-badge">108М · Учебный семестр</div>
+            <h1 id="hero-title">Учебный план и материалы</h1>
+            <p id="hero-subtitle">Пары по звонкам, номера аудиторий, конспекты и интерактивные формулы</p>
+            
+            <div class="search-container">
+                <input type="text" id="search-input" placeholder="Поиск по теме, формуле, кабинету, коду или тегу..." autocomplete="off">
+                <div class="search-icon">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                </div>
+            </div>
+
+            <!-- Фильтры предметов -->
+            <div class="filter-panel">
+                <div class="filter-row" id="subject-filters">
+                    <button class="filter-chip active" data-filter="all">Все предметы</button>
+                </div>
+                
+                <!-- Блок тематических тегов -->
+                <div class="filter-row tags-cloud" id="tag-filters">
+                    <button class="tag-pill active" data-tag="all">Все теги</button>
+                </div>
+            </div>
+        </header>
+
+        <div id="error-msg" class="error-banner" style="display: none;"></div>
+
+        <!-- Рабочая область -->
+        <div id="workspace"></div>
+
+        <!-- Пагинация для архива -->
+        <div id="pagination" class="pagination-bar" style="display: none;">
+            <button id="prev-page" class="pager-btn">
+                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <span id="page-info">1 / 1</span>
+            <button id="next-page" class="pager-btn">
+                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </button>
+        </div>
+    </main>
+
+    <!-- Модальное окно просмотра конспекта -->
+    <div id="scene-lesson" class="overlay-modal">
+        <div class="overlay-bg" onclick="app.closeLesson()"></div>
+        <div class="modal-box">
+            
+            <!-- Шапка окна урока -->
+            <header class="modal-nav">
+                <button class="btn-back" onclick="app.closeLesson()">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                    <span>Назад к расписанию</span>
+                </button>
+
+                <div class="lesson-meta-bar">
+                    <span id="lesson-pair-badge" class="meta-pill pair-pill">1 Пара</span>
+                    <span id="lesson-subject-badge" class="meta-pill subject-pill">Математика</span>
+                    <span id="lesson-room-badge" class="meta-pill room-pill">Кабинет: 2к302</span>
+                    <span id="lesson-date-display" class="date-label">Дата</span>
+                </div>
+
+                <div class="modal-quick-tools">
+                    <button class="icon-tool-btn" onclick="app.copyLessonMarkdown()" title="Скопировать Markdown">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                        <span>MD</span>
+                    </button>
+                    <button class="icon-tool-btn" onclick="app.printLesson()" title="Печать в PDF">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                        <span>PDF</span>
+                    </button>
+                    <button id="start-quiz-btn" class="quiz-trigger-btn" style="display: none;">
+                        <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        Тест
+                    </button>
+                </div>
+            </header>
+
+            <div class="modal-split">
+                <!-- Оглавление слева -->
+                <aside id="modal-toc" class="side-toc">
+                    <div class="toc-header">Оглавление</div>
+                    <nav id="toc-list" class="toc-links"></nav>
+                </aside>
+
+                <!-- Основной скролл урока -->
+                <div class="lesson-scroll-area">
+                    
+                    <!-- Переключатель режима "Подробно / Кратко" (Улучшенный дизайн) -->
+                    <div id="toggle-mode-container" class="content-toggle-wrapper" style="display: none;">
+                        <div class="content-toggle">
+                            <div id="toggle-slider-bar" class="toggle-slider"></div>
+                            <button id="mode-btn-full" class="toggle-btn active" onclick="app.switchContentMode('full')">
+                                <span class="toggle-btn-icon">📖</span>
+                                <span>Подробно</span>
+                            </button>
+                            <button id="mode-btn-tiny" class="toggle-btn" onclick="app.switchContentMode('tiny')">
+                                <span class="toggle-btn-icon">⚡</span>
+                                <span>Кратко</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Красивые теги урока -->
+                    <div id="lesson-tags-row" class="lesson-tags-container"></div>
+
+                    <!-- Контент конспекта -->
+                    <div id="lesson-content" class="markdown-article tex2jax_process"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно тестов (Квиз) -->
+    <div id="scene-quiz" class="overlay-modal">
+        <div class="overlay-bg" onclick="app.closeQuiz()"></div>
+        <div class="modal-box quiz-box">
+            <header class="modal-nav">
+                <button class="btn-back" onclick="app.closeQuiz()">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                    <span>Назад</span>
+                </button>
+                <span class="meta-pill" style="background: rgba(99,102,241,0.2); color: #a5b4fc;">Проверка знаний</span>
+            </header>
+            <div class="lesson-scroll-area tex2jax_process" id="quiz-content"></div>
+        </div>
+    </div>
+
+    <!-- Модальное окно Lightbox для просмотра фото -->
+    <div id="lightbox" class="lightbox" onclick="app.closeLightbox()">
+        <button class="lightbox-x" onclick="app.closeLightbox()">&times;</button>
+        <img id="lightbox-img" src="" alt="Иллюстрация" onclick="event.stopPropagation()">
+        <div id="lightbox-caption" class="lightbox-caption" onclick="event.stopPropagation()"></div>
+    </div>
+
+    <script src="lessons.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
