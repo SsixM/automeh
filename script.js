@@ -132,6 +132,8 @@ const app = {
         };
     },
 
+// Замените методы configureMarkdown, parseAdvancedMarkdown и renderMermaidSafely в объекте app внутри script.js:
+
     configureMarkdown() {
         if (typeof marked === 'undefined') return;
 
@@ -179,25 +181,6 @@ const app = {
             `;
         };
 
-        renderer.image = function(hrefArg, titleArg, textArg) {
-            let href = '';
-            let text = '';
-            if (typeof hrefArg === 'object' && hrefArg !== null) {
-                href = hrefArg.href || '';
-                text = hrefArg.text || hrefArg.title || '';
-            } else {
-                href = hrefArg || '';
-                text = textArg || titleArg || '';
-            }
-
-            return `
-                <figure class="art-image-box">
-                    <img src="${href}" alt="${text}" class="art-image-el" loading="lazy" onclick="app.openLightbox('${href}', '${text.replace(/'/g, "\\'")}')">
-                    ${text ? `<figcaption class="art-image-caption">${text}</figcaption>` : ''}
-                </figure>
-            `;
-        };
-
         marked.setOptions({
             renderer: renderer,
             gfm: true,
@@ -209,25 +192,43 @@ const app = {
                 startOnLoad: false,
                 theme: 'dark',
                 securityLevel: 'loose',
+                themeVariables: {
+                    darkMode: true,
+                    background: '#12141d',
+                    primaryColor: '#6366f1',
+                    primaryTextColor: '#f8fafc',
+                    primaryBorderColor: '#818cf8',
+                    lineColor: '#38bdf8',
+                    secondaryColor: '#1e2235',
+                    tertiaryColor: '#171a26'
+                },
                 flowchart: { htmlLabels: true, curve: 'basis' }
             });
         }
     },
 
-    // ПАРСИНГ: решает проблему превращения HTML в блоки кода
     parseAdvancedMarkdown(rawText) {
         if (!rawText) return '';
+
+        // 1. Нормализация переносов CRLF и экранированных бэктиков
+        let text = rawText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        text = text.replace(/\\(`{3,})/g, '$1');
+
+        // 2. Исправление двойных обратных слэшей перед командами LaTeX (Brightarrow -> B \rightarrow)
+        text = text.replace(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$(?:\\.|[^\$\n])+\$)/g, (mathBlock) => {
+            return mathBlock.replace(/\\\\([a-zA-Z]+)/g, '\\$1');
+        });
 
         const mathPlaceholders = [];
         const widgetPlaceholders = [];
 
-        // 1. Изоляция формул LaTeX
-        let text = rawText.replace(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$(?:\\.|[^\$\n])+\$)/g, (match) => {
+        // 3. Изоляция формул LaTeX от парсера Marked
+        text = text.replace(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$(?:\\.|[^\$\n])+\$)/g, (match) => {
             mathPlaceholders.push(match);
             return `@@MATH_SHIELD_${mathPlaceholders.length - 1}@@`;
         });
 
-        // 2. Изоляция виджетов ДО Marked, чтобы он не превратил их в <pre><code>!
+        // 4. Изоляция интерактивных виджетов
         text = text.replace(/:::graph-derivative[\s\S]*?:::/g, () => {
             const plotId = 'plot_' + Math.random().toString(36).substring(2, 9);
             const widgetHtml = `
@@ -255,70 +256,58 @@ const app = {
             return `\n\n@@WIDGET_SHIELD_${widgetPlaceholders.length - 1}@@\n\n`;
         });
 
-        text = text.replace(/:::calc-derivative[\s\S]*?:::/g, () => {
-            const calcId = 'calc_' + Math.random().toString(36).substring(2, 9);
-            const widgetHtml = `
-<div class="widget-card" id="${calcId}">
-<div class="widget-header">
-<span class="widget-title">🧮 Интерактивный калькулятор: $f(x) = a x^n + b x$</span>
-<span style="font-size: 0.8rem; color: #34d399;">Формульный ввод</span>
-</div>
-<div class="widget-body">
-<div class="calc-inputs-grid">
-<div class="calc-field"><label>Коэффициент $a$</label><input type="number" class="val-a" value="3"></div>
-<div class="calc-field"><label>Степень $n$</label><input type="number" class="val-n" value="3"></div>
-<div class="calc-field"><label>Коэффициент $b$</label><input type="number" class="val-b" value="-5"></div>
-<div class="calc-field"><label>Точка $x_0$</label><input type="number" class="val-x" value="2"></div>
-</div>
-<button class="btn-primary" style="width: 100%;" onclick="app.computeDerivative('${calcId}')">Вычислить $f'(x_0)$ и касательную</button>
-<div class="calc-result-box" style="display: none;"></div>
-</div>
-</div>`;
-            widgetPlaceholders.push(widgetHtml);
-            return `\n\n@@WIDGET_SHIELD_${widgetPlaceholders.length - 1}@@\n\n`;
-        });
-
-        text = text.replace(/:::sim-search[\s\S]*?:::/g, () => {
-            const simId = 'sim_' + Math.random().toString(36).substring(2, 9);
-            const widgetHtml = `
-<div class="widget-card" id="${simId}">
-<div class="widget-header">
-<span class="widget-title">⚙️ Симулятор: Пошаговый бинарный поиск</span>
-<span style="font-size: 0.8rem; color: #fbbf24;">O(log N)</span>
-</div>
-<div class="widget-body">
-<div style="display: flex; gap: 10px; align-items: center; margin-bottom: 1rem;">
-<input type="number" class="calc-field sim-target" placeholder="Искать число" value="38" style="max-width: 220px; background: #141824; border: 1px solid var(--border-subtle); padding: 8px 12px; border-radius: 8px; color: #fff;">
-<button class="btn-primary" onclick="app.stepBinarySearch('${simId}')">Следующий шаг ➔</button>
-<button class="icon-tool-btn" onclick="app.resetBinarySearch('${simId}')">Сброс</button>
-</div>
-<div class="sim-array-display"></div>
-<div class="sim-status-log" style="font-size: 0.9rem; color: #cbd5e1; margin-top: 10px;"></div>
-</div>
-</div>`;
-            widgetPlaceholders.push(widgetHtml);
-            return `\n\n@@WIDGET_SHIELD_${widgetPlaceholders.length - 1}@@\n\n`;
-        });
-
-        // 3. Коллауты (> [!NOTE])
-        text = text.replace(/^>\s*\[!(NOTE|TIP|WARNING|DANGER|INFO|SUCCESS|FORMULA)\](?:\s*([^\n]*))?\n((?:>.*(?:\n|$))*)/gim, (match, type, title, body) => {
-            const cleanBody = body.replace(/^>\s?/gm, '');
+        // 5. Парсинг и санитизация коллаутов
+        text = text.replace(/^>\s*\[!(NOTE|TIP|WARNING|DANGER|INFO|SUCCESS|FORMULA)\][ \t]*([^\n]*)\n((?:>.*(?:\n|$))*)/gim, (match, type, rawTitle, rawBody) => {
             const upperType = type.toUpperCase();
             const icons = { NOTE: 'ℹ️', INFO: '📌', TIP: '💡', WARNING: '⚠️', DANGER: '🚨', SUCCESS: '✅', FORMULA: '📐' };
             const classes = { NOTE: 'info', INFO: 'info', TIP: 'tip', WARNING: 'warning', DANGER: 'danger', SUCCESS: 'success', FORMULA: 'formula' };
-            const displayTitle = (title && title.trim()) ? title.trim() : upperType;
-            return `\n<div class="callout-box callout-${classes[upperType]}"><div class="callout-head"><span>${icons[upperType]}</span> ${displayTitle}</div><div class="callout-content">${marked.parse(cleanBody)}</div></div>\n`;
+            const defaultTitles = {
+                NOTE: 'Определение',
+                INFO: 'Информация',
+                TIP: 'Совет',
+                WARNING: 'Предупреждение',
+                DANGER: 'Важно',
+                SUCCESS: 'Успешно',
+                FORMULA: 'Формула'
+            };
+
+            let lines = rawBody.split('\n').map(l => l.replace(/^>[ \t]?/, ''));
+            while (lines.length > 0 && !lines[0].trim()) lines.shift();
+
+            let title = rawTitle ? rawTitle.trim() : '';
+            if (!title && lines.length > 0) {
+                const firstLine = lines[0].trim();
+                const titleMatch = firstLine.match(/^\*{2}(.*?)\*{2}:?\s*(.*)$/);
+                if (titleMatch) {
+                    title = titleMatch[1].replace(/[:*]/g, '').trim();
+                    if (titleMatch[2].trim()) {
+                        lines[0] = titleMatch[2].trim();
+                    } else {
+                        lines.shift();
+                    }
+                }
+            }
+
+            title = title.replace(/^>\s*/, '').replace(/^\*{2}(.*?)\*{2}:?$/, '$1').replace(/[:*]/g, '').trim();
+            if (!title) title = defaultTitles[upperType] || upperType;
+
+            const cleanBody = lines.join('\n').trim();
+            const bodyHtml = marked.parse(cleanBody);
+
+            return `\n<div class="callout-box callout-${classes[upperType]}"><div class="callout-head"><span class="callout-icon">${icons[upperType]}</span> <span class="callout-title-text">${title}</span></div><div class="callout-content">${bodyHtml}</div></div>\n`;
         });
 
-        // 4. Парсинг Markdown
+        // 6. Парсинг Markdown
         let html = marked.parse(text);
 
-        // 5. Вставляем HTML виджетов обратно (гарантированно без превращения в код)
+        // 7. Вставка виджетов
         html = html.replace(/<p>@@WIDGET_SHIELD_(\d+)@@<\/p>/g, (m, idx) => widgetPlaceholders[idx]);
         html = html.replace(/@@WIDGET_SHIELD_(\d+)@@/g, (m, idx) => widgetPlaceholders[idx]);
 
-        // 6. Возврат формул MathJax
-        html = html.replace(/@@MATH_SHIELD_(\d+)@@/g, (match, idx) => mathPlaceholders[idx]);
+        // 8. Безопасный возврат формул MathJax
+        html = html.replace(/@@MATH_SHIELD_(\d+)@@/g, (match, idx) => {
+            return mathPlaceholders[Number(idx)] || '';
+        });
 
         return html;
     },
@@ -329,8 +318,9 @@ const app = {
         
         for (let i = 0; i < mermaidEls.length; i++) {
             const el = mermaidEls[i];
-            const rawCode = el.getAttribute('data-code') || el.textContent.trim();
-            const uniqueId = 'mermaid_diagram_' + Math.random().toString(36).substring(2, 9);
+            let rawCode = el.getAttribute('data-code') || el.textContent.trim();
+            rawCode = rawCode.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+            const uniqueId = 'mermaid_' + Math.random().toString(36).substring(2, 9);
             
             try {
                 const { svg } = await mermaid.render(uniqueId, rawCode);
@@ -339,7 +329,7 @@ const app = {
                 console.warn('Ошибка синтаксиса в Mermaid:', err);
                 el.innerHTML = `
                     <div class="mermaid-error-fallback">
-                        <b>⚠️ Диаграмма временно недоступна для отображения</b>
+                        <b>⚠️ Ошибка построения диаграммы</b>
                         <pre style="margin-top: 6px; font-family: monospace; font-size: 0.8rem; color: #94a3b8;">${rawCode.replace(/</g, '&lt;')}</pre>
                     </div>
                 `;
