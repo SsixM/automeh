@@ -81,7 +81,6 @@ const app = {
         this.initData();
         this.checkURLParams();
 
-        // Скроллим к текущему дню недели после загрузки
         setTimeout(() => {
             if (this.currentView === 'schedule') {
                 this.scrollToToday(false);
@@ -131,8 +130,6 @@ const app = {
             lightboxCaption: document.getElementById('lightbox-caption')
         };
     },
-
-// Замените методы configureMarkdown, parseAdvancedMarkdown и renderMermaidSafely в объекте app внутри script.js:
 
     configureMarkdown() {
         if (typeof marked === 'undefined') return;
@@ -210,25 +207,41 @@ const app = {
     parseAdvancedMarkdown(rawText) {
         if (!rawText) return '';
 
-        // 1. Нормализация переносов CRLF и экранированных бэктиков
-        let text = rawText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        // 1. Нормализация переносов строк
+        let text = rawText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+
+        // 2. Снятие внешней ложной обертки всего конспекта в ```markdown ... ```
+        const outerMatch = text.match(/^```(?:markdown)?\s*\n([\s\S]*?)\n```\s*$/i);
+        if (outerMatch) {
+            text = outerMatch[1].trim();
+        } else {
+            text = text.replace(/^```(?:markdown)?\s*\n/i, '');
+            text = text.replace(/\n*```\s*$/, '');
+        }
+
+        // 3. Удаление случайных тегов и хвостов в самом конце конспекта
+        text = text.replace(/\n+\s*(?:\*\*)?Теги(?:\*\*)?\s*:\s*[^\n]+$/i, '');
+        text = text.replace(/\n*```\s*$/, '');
+
+        // 4. Нормализация экранированных бэктиков
         text = text.replace(/\\(`{3,})/g, '$1');
 
-        // 2. Исправление двойных обратных слэшей перед командами LaTeX (Brightarrow -> B \rightarrow)
+        // 5. Исправление двойных обратных слэшей в формулах LaTeX
         text = text.replace(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$(?:\\.|[^\$\n])+\$)/g, (mathBlock) => {
             return mathBlock.replace(/\\\\([a-zA-Z]+)/g, '\\$1');
         });
 
         const mathPlaceholders = [];
         const widgetPlaceholders = [];
+        const calloutPlaceholders = [];
 
-        // 3. Изоляция формул LaTeX от парсера Marked
+        // 6. Изоляция формул LaTeX от Marked
         text = text.replace(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$(?:\\.|[^\$\n])+\$)/g, (match) => {
             mathPlaceholders.push(match);
             return `@@MATH_SHIELD_${mathPlaceholders.length - 1}@@`;
         });
 
-        // 4. Изоляция интерактивных виджетов
+        // 7. Изоляция интерактивных виджетов
         text = text.replace(/:::graph-derivative[\s\S]*?:::/g, () => {
             const plotId = 'plot_' + Math.random().toString(36).substring(2, 9);
             const widgetHtml = `
@@ -256,8 +269,9 @@ const app = {
             return `\n\n@@WIDGET_SHIELD_${widgetPlaceholders.length - 1}@@\n\n`;
         });
 
-        // 5. Парсинг и санитизация коллаутов
-        text = text.replace(/^>\s*\[!(NOTE|TIP|WARNING|DANGER|INFO|SUCCESS|FORMULA)\][ \t]*([^\n]*)\n((?:>.*(?:\n|$))*)/gim, (match, type, rawTitle, rawBody) => {
+        // 8. Изоляция и парсинг коллаутов (защита от экранирования в код)
+        const calloutRegex = /^>[ \t]*\[!(NOTE|TIP|WARNING|DANGER|INFO|SUCCESS|FORMULA)\][ \t]*([^\n]*)\n((?:>.*(?:\n|$))*)/gim;
+        text = text.replace(calloutRegex, (match, type, rawTitle, rawBody) => {
             const upperType = type.toUpperCase();
             const icons = { NOTE: 'ℹ️', INFO: '📌', TIP: '💡', WARNING: '⚠️', DANGER: '🚨', SUCCESS: '✅', FORMULA: '📐' };
             const classes = { NOTE: 'info', INFO: 'info', TIP: 'tip', WARNING: 'warning', DANGER: 'danger', SUCCESS: 'success', FORMULA: 'formula' };
@@ -294,17 +308,29 @@ const app = {
             const cleanBody = lines.join('\n').trim();
             const bodyHtml = marked.parse(cleanBody);
 
-            return `\n<div class="callout-box callout-${classes[upperType]}"><div class="callout-head"><span class="callout-icon">${icons[upperType]}</span> <span class="callout-title-text">${title}</span></div><div class="callout-content">${bodyHtml}</div></div>\n`;
+            const calloutHtml = `
+<div class="callout-box callout-${classes[upperType]}">
+    <div class="callout-head">
+        <span class="callout-icon">${icons[upperType]}</span>
+        <span class="callout-title-text">${title}</span>
+    </div>
+    <div class="callout-content">${bodyHtml}</div>
+</div>`;
+            calloutPlaceholders.push(calloutHtml);
+            return `\n\n@@CALLOUT_SHIELD_${calloutPlaceholders.length - 1}@@\n\n`;
         });
 
-        // 6. Парсинг Markdown
+        // 9. Парсинг Markdown
         let html = marked.parse(text);
 
-        // 7. Вставка виджетов
+        // 10. Восстановление экранированных коллаутов и виджетов
+        html = html.replace(/<p>@@CALLOUT_SHIELD_(\d+)@@<\/p>/g, (m, idx) => calloutPlaceholders[idx]);
+        html = html.replace(/@@CALLOUT_SHIELD_(\d+)@@/g, (m, idx) => calloutPlaceholders[idx]);
+
         html = html.replace(/<p>@@WIDGET_SHIELD_(\d+)@@<\/p>/g, (m, idx) => widgetPlaceholders[idx]);
         html = html.replace(/@@WIDGET_SHIELD_(\d+)@@/g, (m, idx) => widgetPlaceholders[idx]);
 
-        // 8. Безопасный возврат формул MathJax
+        // 11. Безопасный возврат формул MathJax
         html = html.replace(/@@MATH_SHIELD_(\d+)@@/g, (match, idx) => {
             return mathPlaceholders[Number(idx)] || '';
         });
@@ -346,9 +372,6 @@ const app = {
             if (card.querySelector('.plot-canvas')) {
                 this.setupInteractivePlot(card);
             }
-            if (card.querySelector('.sim-array-display')) {
-                this.initBinarySearchWidget(card);
-            }
         });
     },
 
@@ -371,7 +394,6 @@ const app = {
             const scaleX = 70;
             const scaleY = 35;
 
-            // Сетка
             ctx.strokeStyle = '#1a202c';
             ctx.lineWidth = 1;
             for (let x = 0; x < w; x += 35) {
@@ -381,13 +403,11 @@ const app = {
                 ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
             }
 
-            // Оси
             ctx.strokeStyle = '#475569';
             ctx.lineWidth = 1.5;
             ctx.beginPath(); ctx.moveTo(0, originY); ctx.lineTo(w, originY); ctx.stroke();
             ctx.beginPath(); ctx.moveTo(originX, 0); ctx.lineTo(originX, h); ctx.stroke();
 
-            // f(x) = x^2
             ctx.strokeStyle = '#818cf8';
             ctx.lineWidth = 3;
             ctx.beginPath();
@@ -401,7 +421,6 @@ const app = {
             }
             ctx.stroke();
 
-            // Касательная
             const y0 = x0 * x0;
             const k = 2 * x0;
             const alpha = Math.atan(k) * (180 / Math.PI);
@@ -422,7 +441,6 @@ const app = {
             ctx.stroke();
             ctx.setLineDash([]);
 
-            // Точка касания
             ctx.fillStyle = '#f43f5e';
             ctx.beginPath();
             ctx.arc(ptCanvasX, ptCanvasY, 6, 0, Math.PI * 2);
@@ -438,111 +456,10 @@ const app = {
         draw(parseFloat(slider.value));
     },
 
-    computeDerivative(calcId) {
-        const card = document.getElementById(calcId);
-        if (!card) return;
-        const a = parseFloat(card.querySelector('.val-a').value) || 0;
-        const n = parseFloat(card.querySelector('.val-n').value) || 0;
-        const b = parseFloat(card.querySelector('.val-b').value) || 0;
-        const x = parseFloat(card.querySelector('.val-x').value) || 0;
-
-        const coeffDeriv = a * n;
-        const powerDeriv = n - 1;
-        const fPrimeVal = (coeffDeriv * Math.pow(x, powerDeriv)) + b;
-        const fVal = (a * Math.pow(x, n)) + (b * x);
-
-        const resultBox = card.querySelector('.calc-result-box');
-        resultBox.style.display = 'block';
-        resultBox.innerHTML = `
-            <b>Аналитическое решение:</b><br>
-            1. Функция: $f(x) = ${a}x^{${n}} + (${b}x)$<br>
-            2. Формула производной: $f'(x) = ${coeffDeriv}x^{${powerDeriv}} + (${b})$<br>
-            3. В точке $x_0 = ${x}$: <b>$f'(${x}) = ${fPrimeVal.toFixed(2)}$</b><br>
-            4. Касательная: $y = ${fVal.toFixed(2)} + ${fPrimeVal.toFixed(2)}(x - ${x})$
-        `;
-        if (window.MathJax && window.MathJax.typesetPromise) {
-            MathJax.typesetPromise([resultBox]);
-        }
-    },
-
-    initBinarySearchWidget(card) {
-        card._simData = {
-            arr: [3, 7, 12, 19, 24, 38, 45, 52, 67, 81, 94],
-            left: 0,
-            right: 10,
-            mid: -1,
-            found: false,
-            step: 0
-        };
-        this.renderBinarySearchArray(card);
-    },
-
-    renderBinarySearchArray(card) {
-        const d = card._simData;
-        const container = card.querySelector('.sim-array-display');
-        const log = card.querySelector('.sim-status-log');
-        let html = '';
-
-        d.arr.forEach((num, idx) => {
-            let cls = 'sim-cell';
-            if (d.found && idx === d.mid) cls += ' found';
-            else if (idx === d.mid) cls += ' pointer-mid';
-            else if (idx === d.left) cls += ' pointer-l';
-            else if (idx === d.right) cls += ' pointer-r';
-
-            html += `
-                <div class="${cls}">
-                    <span>${num}</span>
-                    <span class="sim-cell-idx">${idx}</span>
-                </div>
-            `;
-        });
-        container.innerHTML = html;
-
-        if (d.found) {
-            log.innerHTML = `<span style="color: #34d399; font-weight: bold;">🎉 Элемент найден на позиции #${d.mid} за ${d.step} шагов!</span>`;
-        } else if (d.left > d.right) {
-            log.innerHTML = `<span style="color: #f87171;">Элемент отсутствует в массиве. Поиск завершен.</span>`;
-        } else if (d.step === 0) {
-            log.textContent = `Массив из ${d.arr.length} элементов. Введите число и нажимайте "Следующий шаг"`;
-        } else {
-            log.textContent = `Шаг ${d.step}: Границы L=${d.left}, R=${d.right}. Текущий Mid=${d.mid} (значение ${d.arr[d.mid]})`;
-        }
-    },
-
-    stepBinarySearch(simId) {
-        const card = document.getElementById(simId);
-        const d = card._simData;
-        const target = parseInt(card.querySelector('.sim-target').value);
-
-        if (d.found || d.left > d.right) return;
-
-        d.step++;
-        d.mid = Math.floor((d.left + d.right) / 2);
-
-        if (d.arr[d.mid] === target) {
-            d.found = true;
-        } else if (d.arr[d.mid] < target) {
-            d.left = d.mid + 1;
-        } else {
-            d.right = d.mid - 1;
-        }
-
-        this.renderBinarySearchArray(card);
-    },
-
-    resetBinarySearch(simId) {
-        const card = document.getElementById(simId);
-        this.initBinarySearchWidget(card);
-    },
-
-    // Определение сегодняшнего дня недели (0 = Понедельник ... 4 = Пятница)
     getCurrentDayIndex() {
-        const day = new Date().getDay(); // 0 - Вс, 1 - Пн, 2 - Вт, 3 - Ср, 4 - Чт, 5 - Пт, 6 - Сб
-        if (day >= 1 && day <= 5) {
-            return day - 1;
-        }
-        return 0; // На выходных показываем понедельник
+        const day = new Date().getDay();
+        if (day >= 1 && day <= 5) return day - 1;
+        return 0;
     },
 
     scrollToToday(smooth = true) {

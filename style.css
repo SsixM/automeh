@@ -26,11 +26,16 @@
 }
 
 /* =============================================================
-   КАСТОМНЫЕ СЛАЙДЕРЫ / СКРОЛЛБАРЫ
+   КАСТОМНЫЕ СКРОЛЛБАРЫ (ПОЛЗУНКИ СЕТКИ И ОКНА)
 ============================================================= */
+html, body {
+    scrollbar-width: thin;
+    scrollbar-color: #1e2235 #090a0f;
+}
+
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 7px;
+    height: 7px;
 }
 ::-webkit-scrollbar-track {
     background: #090a0f;
@@ -38,15 +43,47 @@
 ::-webkit-scrollbar-thumb {
     background: #1e2235;
     border-radius: 9999px;
-    border: 2px solid #090a0f;
-    transition: background 0.2s ease;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: background 0.2s ease, box-shadow 0.2s ease;
 }
 ::-webkit-scrollbar-thumb:hover {
     background: #6366f1;
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.6);
 }
-* {
+
+.lesson-scroll-area, .side-toc, pre, .mermaid-wrapper, .markdown-article table {
     scrollbar-width: thin;
-    scrollbar-color: #1e2235 #090a0f;
+    scrollbar-color: #272c42 #0c0e15;
+}
+.lesson-scroll-area::-webkit-scrollbar, 
+.side-toc::-webkit-scrollbar,
+pre::-webkit-scrollbar,
+.mermaid-wrapper::-webkit-scrollbar,
+.markdown-article table::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+.lesson-scroll-area::-webkit-scrollbar-track,
+.side-toc::-webkit-scrollbar-track,
+pre::-webkit-scrollbar-track,
+.mermaid-wrapper::-webkit-scrollbar-track,
+.markdown-article table::-webkit-scrollbar-track {
+    background: #0c0e15;
+}
+.lesson-scroll-area::-webkit-scrollbar-thumb,
+.side-toc::-webkit-scrollbar-thumb,
+pre::-webkit-scrollbar-thumb,
+.mermaid-wrapper::-webkit-scrollbar-thumb,
+.markdown-article table::-webkit-scrollbar-thumb {
+    background: #272c42;
+    border-radius: 9999px;
+}
+.lesson-scroll-area::-webkit-scrollbar-thumb:hover,
+.side-toc::-webkit-scrollbar-thumb:hover,
+pre::-webkit-scrollbar-thumb:hover,
+.mermaid-wrapper::-webkit-scrollbar-thumb:hover,
+.markdown-article table::-webkit-scrollbar-thumb:hover {
+    background: #6366f1;
 }
 
 body {
@@ -58,7 +95,6 @@ body {
     line-height: 1.6;
 }
 
-/* Фоновое свечение */
 .ambient-glow {
     position: fixed; width: 600px; height: 600px; border-radius: 50%;
     filter: blur(140px); opacity: 0.12; pointer-events: none; z-index: -1;
@@ -73,7 +109,7 @@ body {
     border-bottom: 1px solid var(--border-subtle);
 }
 .nav-container {
-    max-width: 1560px; margin: 0 auto; padding: 0 1.75rem;
+    max-width: 1680px; margin: 0 auto; padding: 0 1.75rem;
     display: flex; justify-content: space-between; align-items: center; gap: 1rem;
 }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.15rem; color: #fff; }
@@ -115,7 +151,7 @@ body {
 }
 
 /* Главный контейнер */
-.main-wrapper { max-width: 1560px; margin: 0 auto; padding: 2.5rem 1.75rem 5rem; }
+.main-wrapper { max-width: 1680px; margin: 0 auto; padding: 2.5rem 1.75rem 5rem; }
 .hero-section { text-align: center; margin-bottom: 3.5rem; }
 .hero-badge {
     display: inline-block; padding: 4px 14px; border-radius: 100px;
@@ -256,24 +292,27 @@ body {
 .pair-state.muted { color: var(--text-muted); }
 .open-arrow { font-size: 0.85rem; font-weight: 600; color: var(--accent); }
 
-/* Слайдер переключения режимов */
+/* =============================================================
+   КАСТОМНЫЙ ПЕРЕКЛЮЧАТЕЛЬ «ПОДРОБНО / КРАТКО»
+============================================================= */
 .content-toggle-wrapper { display: flex; justify-content: center; margin-bottom: 2.2rem; }
 .content-toggle {
     position: relative; display: flex;
-    background: rgba(15, 17, 26, 0.85);
+    background: rgba(14, 16, 26, 0.9);
     border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
     backdrop-filter: blur(16px);
-    border-radius: 100px;
+    border-radius: 9999px;
     padding: 4px;
     width: 320px;
+    user-select: none;
 }
 .toggle-slider {
     position: absolute; top: 4px; left: 4px;
     width: calc(50% - 4px); height: calc(100% - 8px);
     background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-    box-shadow: 0 2px 12px rgba(99, 102, 241, 0.45);
-    border-radius: 100px;
+    box-shadow: 0 2px 14px rgba(99, 102, 241, 0.5), 0 0 1px #fff;
+    border-radius: 9999px;
     transition: transform 0.28s cubic-bezier(0.25, 1, 0.5, 1);
 }
 .toggle-btn {
@@ -283,22 +322,24 @@ body {
     padding: 10px 0; font-family: var(--font-sans);
     font-size: 0.92rem; font-weight: 700;
     cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
-    border-radius: 100px; transition: color 0.25s ease;
+    border-radius: 9999px; transition: color 0.25s ease;
 }
 .toggle-btn-icon { font-size: 1rem; }
 .toggle-btn.active { color: #ffffff; }
 
-/* Кастомный Range-слайдер */
+/* =============================================================
+   КАСТОМНЫЙ RANGE INPUT (СЛАЙДЕР В ГРАФИКАХ)
+============================================================= */
 .plot-slider {
     -webkit-appearance: none; appearance: none;
     width: 100%; height: 8px;
-    background: rgba(255, 255, 255, 0.08);
-    border-radius: 999px; outline: none;
+    background: linear-gradient(90deg, #1e2235, #141824);
+    border-radius: 9999px; outline: none;
     transition: all 0.2s ease;
     border: 1px solid rgba(255, 255, 255, 0.08);
 }
 .plot-slider:hover {
-    background: rgba(255, 255, 255, 0.14);
+    background: #242a42;
     border-color: rgba(99, 102, 241, 0.4);
 }
 .plot-slider::-webkit-slider-thumb {
@@ -349,30 +390,6 @@ body {
 .stat-name { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; }
 .stat-val { font-size: 1.05rem; font-weight: 700; font-family: var(--font-mono); color: #fff; margin-top: 3px; }
 
-.calc-inputs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 1.2rem; }
-.calc-field label { display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px; }
-.calc-field input {
-    width: 100%; background: #141824; border: 1px solid var(--border-subtle); padding: 8px 12px;
-    border-radius: 8px; color: #fff; font-family: var(--font-mono); font-size: 0.95rem;
-}
-.calc-field input:focus { border-color: var(--primary); outline: none; }
-.calc-result-box {
-    margin-top: 1.2rem; padding: 1rem; border-radius: 10px; background: rgba(16, 185, 129, 0.08);
-    border: 1px solid rgba(16, 185, 129, 0.25); color: #34d399; font-size: 1rem; line-height: 1.5;
-}
-
-.sim-array-display { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 1.5rem 0; }
-.sim-cell {
-    width: 46px; height: 46px; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    border: 1px solid var(--border-subtle); background: #141824; border-radius: 8px; font-family: var(--font-mono);
-    font-weight: 700; transition: all 0.2s; position: relative;
-}
-.sim-cell.pointer-l { border-color: #38bdf8; background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
-.sim-cell.pointer-r { border-color: #ec4899; background: rgba(236, 72, 153, 0.15); color: #f472b6; }
-.sim-cell.pointer-mid { border-color: #f59e0b; background: rgba(245, 158, 11, 0.2); color: #fbbf24; transform: scale(1.08); }
-.sim-cell.found { border-color: #10b981; background: rgba(16, 185, 129, 0.25); color: #34d399; transform: scale(1.1); }
-.sim-cell-idx { font-size: 0.65rem; color: var(--text-muted); }
-
 /* Статьи и конспекты */
 .markdown-article { font-size: 1.1rem; line-height: 1.8; color: #e2e8f0; }
 .markdown-article h1, .markdown-article h2, .markdown-article h3, .markdown-article h4 {
@@ -408,12 +425,13 @@ body {
 .callout-danger { border-left-color: #ef4444; background: rgba(239, 68, 68, 0.08); }
 .callout-formula { border-left-color: #8b5cf6; background: rgba(139, 92, 246, 0.08); }
 
-/* MathJax */
+/* MathJax Формулы */
 mjx-container[jax="CHTML"][display="true"] {
-    overflow-x: auto; overflow-y: hidden; max-width: 100%; padding: 0.5rem 0;
+    overflow-x: auto; overflow-y: hidden; max-width: 100%;
+    padding: 0.3rem 0; margin: 0.8rem 0 !important;
 }
 
-/* Код */
+/* Блоки кода */
 .code-card {
     margin: 1.8rem 0; border-radius: 12px; border: 1px solid var(--border-subtle);
     background: #0b0d13; overflow: hidden;
@@ -435,7 +453,7 @@ mjx-container[jax="CHTML"][display="true"] {
     background: rgba(255,255,255,0.08); color: #f43f5e; padding: 0.2em 0.45em; border-radius: 6px; font-family: var(--font-mono); font-size: 0.9em;
 }
 
-/* Mermaid */
+/* Диаграммы Mermaid */
 .mermaid-wrapper { margin: 2.2rem 0; width: 100%; overflow-x: auto; }
 .mermaid {
     background: rgba(16, 19, 28, 0.85); border: 1px solid var(--border-subtle); border-radius: 14px;
@@ -456,7 +474,9 @@ mjx-container[jax="CHTML"][display="true"] {
 .markdown-article th { background: rgba(255, 255, 255, 0.04); font-weight: 600; color: #fff; }
 .markdown-article tr:nth-child(even) { background: rgba(255, 255, 255, 0.015); }
 
-/* Модальное окно урока (Широкое) */
+/* =============================================================
+   МОДАЛЬНОЕ ОКНО УРОКА (РАСШИРЕННОЕ ДО 1680px / 96vw)
+============================================================= */
 .overlay-modal {
     position: fixed; inset: 0; z-index: 100; display: flex; justify-content: center;
     opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
@@ -465,11 +485,11 @@ mjx-container[jax="CHTML"][display="true"] {
 .overlay-bg { position: absolute; inset: 0; background: rgba(0,0,0,0.88); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 
 .modal-box {
-    position: relative; z-index: 101; width: 95vw; max-width: 1560px; background: #0c0e15;
+    position: relative; z-index: 101; width: 96vw; max-width: 1680px; background: #0c0e15;
     height: 96vh; margin: 2vh auto; border-radius: 20px;
     transform: translateY(24px) scale(0.98); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     display: flex; flex-direction: column; border: 1px solid var(--border-subtle);
-    box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.05);
     overflow: hidden;
 }
 .overlay-modal.active .modal-box { transform: translateY(0) scale(1); }
@@ -518,7 +538,7 @@ mjx-container[jax="CHTML"][display="true"] {
 .toc-item-link.level-3 { padding-left: 1.2rem; font-size: 0.82rem; }
 
 .lesson-scroll-area {
-    padding: 2.5rem 4rem 5rem; overflow-y: auto; overflow-x: hidden; flex: 1; scroll-behavior: smooth;
+    padding: 2.2rem 3.2rem 5rem; overflow-y: auto; overflow-x: hidden; flex: 1; scroll-behavior: smooth;
 }
 
 /* Lightbox */
