@@ -1,4 +1,4 @@
-﻿const lessons = [
+const lessons = [
     {
         id: "informatika-texnika-bezopasnosti-2026-09-03",
         title: "Техника безопасности в компьютерном классе. Введение в курс информатики",

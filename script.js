@@ -463,8 +463,7 @@ const app = {
     },
 
     scrollToToday(smooth = true) {
-        const currentIdx = this.getCurrentDayIndex();
-        const targetEl = document.getElementById(`day-block-${currentIdx}`);
+        const targetEl = document.getElementById('day-block-today');
         if (targetEl) {
             targetEl.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' });
         }
@@ -609,65 +608,185 @@ const app = {
         }
     },
 
+    getISOWeek(date) {
+        const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const dayNum = (d.getDay() + 6) % 7;
+        d.setDate(d.getDate() - dayNum + 3);
+        const firstThursday = new Date(d.getFullYear(), 0, 4);
+        const firstDayNum = (firstThursday.getDay() + 6) % 7;
+        firstThursday.setDate(firstThursday.getDate() - firstDayNum + 3);
+        const week = 1 + Math.round((d - firstThursday) / (7 * 24 * 3600 * 1000));
+        return { year: d.getFullYear(), week };
+    },
+
+    getWeekRange(year, weekNumber) {
+        const firstThursday = new Date(year, 0, 4);
+        const firstDayNum = (firstThursday.getDay() + 6) % 7;
+        const firstMonday = new Date(firstThursday);
+        firstMonday.setDate(firstThursday.getDate() - firstDayNum);
+        const start = new Date(firstMonday);
+        start.setDate(firstMonday.getDate() + (weekNumber - 1) * 7);
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        return { start, end };
+    },
+
+    formatWeekRange(start, end) {
+        const dayOnly = new Intl.DateTimeFormat('ru-RU', { day: 'numeric' });
+        const dayMonth = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' });
+        if (start.getMonth() === end.getMonth()) {
+            return `${dayOnly.format(start)} – ${dayMonth.format(end)}`;
+        }
+        return `${dayMonth.format(start)} – ${dayMonth.format(end)}`;
+    },
+
+    getCurrentWeekNumber() {
+        const now = new Date();
+        return this.getISOWeek(now);
+    },
+
+    getWeekDelta(weekA, weekB) {
+        const { start: aStart } = this.getWeekRange(weekA.year, weekA.week);
+        const { start: bStart } = this.getWeekRange(weekB.year, weekB.week);
+        return Math.round((bStart - aStart) / (7 * 24 * 3600 * 1000));
+    },
+
+    parseDate(value) {
+        if (value instanceof Date) return value;
+        const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (match) return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+        return new Date(value);
+    },
+
+    pluralRu(n, one, few, many) {
+        const n10 = n % 10;
+        const n100 = n % 100;
+        if (n10 === 1 && n100 !== 11) return one;
+        if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return few;
+        return many;
+    },
+
+    findLessonForPair(pair, day) {
+        return this.data.find(l => {
+            const matchSubj = l.subject.toLowerCase() === pair.subject.toLowerCase();
+            const matchDay = (l.dayIndex !== undefined && l.dayIndex === day.dayIndex);
+            const matchPair = (!l.pairNumber || l.pairNumber === pair.num);
+            return matchSubj && matchDay && matchPair;
+        }) || null;
+    },
+
     renderSchedule() {
         this.dom.pagination.style.display = 'none';
         const search = this.state.search;
         const filterSubj = this.state.filter;
         const filterTag = this.state.tagFilter;
         const todayIndex = this.getCurrentDayIndex();
+        const currentWeek = this.getCurrentWeekNumber();
+
+        const dayDateFormatter = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' });
+
+        // Шаблон расписания с привязанными конспектами
+        const daysWithPairs = SCHEDULE_108M.map(day => ({
+            ...day,
+            pairsData: day.pairs.map(pair => ({
+                ...pair,
+                lesson: this.findLessonForPair(pair, day)
+            }))
+        }));
+
+        // Недели, в которых есть хотя бы один конспект
+        const lessonWeeks = new Map();
+        const weekKeyOf = (lesson) => {
+            const wi = lesson && lesson.date ? this.getISOWeek(this.parseDate(lesson.date)) : currentWeek;
+            return `${wi.year}-W${wi.week}`;
+        };
+        this.data.forEach(l => {
+            const wi = l.date ? this.getISOWeek(this.parseDate(l.date)) : currentWeek;
+            lessonWeeks.set(`${wi.year}-W${wi.week}`, wi);
+        });
+
+        if (lessonWeeks.size === 0) {
+            this.dom.workspace.innerHTML = `
+                <div class="schedule-empty fade-in">
+                    <div class="schedule-empty-icon">🗓️</div>
+                    <h3>Конспектов пока нет</h3>
+                    <p>Недели появятся здесь, как только появятся конспекты занятий.</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Порядок: текущая неделя, затем прошлые (от ближайшей к давним), затем будущие
+        const orderedWeeks = [...lessonWeeks.values()].sort((a, b) => {
+            const da = this.getWeekDelta(currentWeek, a);
+            const db = this.getWeekDelta(currentWeek, b);
+            const rank = d => (d === 0 ? 0 : (d < 0 ? -d : 1000 + d));
+            return rank(da) - rank(db);
+        });
 
         let html = `<div class="schedule-view fade-in">`;
+        let anyWeekRendered = false;
 
-        SCHEDULE_108M.forEach(day => {
-            const isToday = (day.dayIndex === todayIndex);
+        orderedWeeks.forEach(wi => {
+            const weekKey = `${wi.year}-W${wi.week}`;
+            const { start } = this.getWeekRange(wi.year, wi.week);
+            const delta = this.getWeekDelta(currentWeek, wi);
+            const isCurrent = delta === 0;
 
-            const pairsData = day.pairs.map(pair => {
-                const found = this.data.find(l => {
-                    const matchSubj = l.subject.toLowerCase() === pair.subject.toLowerCase();
-                    const matchDay = (l.dayIndex !== undefined && l.dayIndex === day.dayIndex);
-                    const matchPair = (!l.pairNumber || l.pairNumber === pair.num);
-                    return matchSubj && matchDay && matchPair;
+            const statusText = isCurrent
+                ? 'Текущая неделя'
+                : (delta === -1 ? 'Прошлая неделя' : (delta < 0 ? `${-delta} нед. назад` : `Через ${delta} нед.`));
+
+            const weekLessonCount = this.data.filter(l => weekKeyOf(l) === weekKey).length;
+
+            let weekBody = '';
+            let dayRendered = false;
+
+            daysWithPairs.forEach(day => {
+                const dayDate = new Date(start.getFullYear(), start.getMonth(), start.getDate() + day.dayIndex);
+                const isToday = isCurrent && day.dayIndex === todayIndex;
+
+                const pairsData = day.pairsData.map(p => (
+                    p.lesson && weekKeyOf(p.lesson) !== weekKey ? { ...p, lesson: null } : p
+                ));
+                const hasAnyLesson = pairsData.some(p => p.lesson !== null);
+
+                const filteredPairs = pairsData.filter(p => {
+                    if (filterSubj !== 'all' && !p.subject.toLowerCase().includes(filterSubj.toLowerCase())) return false;
+                    if (filterTag !== 'all') {
+                        if (!p.lesson || !Array.isArray(p.lesson.tags) || !p.lesson.tags.includes(filterTag)) return false;
+                    }
+                    if (search) {
+                        const inSubject = p.subject.toLowerCase().includes(search);
+                        const inTeacher = p.teacher.toLowerCase().includes(search);
+                        const inRoom = p.room.toLowerCase().includes(search);
+                        const inContent = p.lesson && (p.lesson.title.toLowerCase().includes(search) || p.lesson.content.toLowerCase().includes(search));
+                        return inSubject || inTeacher || inRoom || inContent;
+                    }
+                    return true;
                 });
-                return { ...pair, lesson: found || null };
-            });
 
-            const filteredPairs = pairsData.filter(p => {
-                if (filterSubj !== 'all' && !p.subject.toLowerCase().includes(filterSubj.toLowerCase())) return false;
-                if (filterTag !== 'all') {
-                    if (!p.lesson || !Array.isArray(p.lesson.tags) || !p.lesson.tags.includes(filterTag)) return false;
-                }
-                if (search) {
-                    const inSubject = p.subject.toLowerCase().includes(search);
-                    const inTeacher = p.teacher.toLowerCase().includes(search);
-                    const inRoom = p.room.toLowerCase().includes(search);
-                    const inContent = p.lesson && (p.lesson.title.toLowerCase().includes(search) || p.lesson.content.toLowerCase().includes(search));
-                    return inSubject || inTeacher || inRoom || inContent;
-                }
-                return true;
-            });
+                if (filteredPairs.length === 0 && (search || filterSubj !== 'all' || filterTag !== 'all')) return;
+                dayRendered = true;
 
-            if (filteredPairs.length === 0 && (search || filterSubj !== 'all' || filterTag !== 'all')) return;
-
-            const hasAnyLesson = pairsData.some(p => p.lesson !== null);
-
-            html += `
-                <div class="day-card-group ${isToday ? 'is-today' : ''}" id="day-block-${day.dayIndex}">
+                weekBody += `
+                <div class="day-card-group ${isToday ? 'is-today' : ''}" id="${isToday ? 'day-block-today' : `day-block-${weekKey}-${day.dayIndex}`}">
                     <div class="day-bar">
                         <div>
                             <span class="day-bar-title">${day.dayName}</span>
-                            <span class="day-bar-meta">${day.pairs.length} пары по звонкам</span>
+                            <span class="day-bar-meta">${dayDateFormatter.format(dayDate)}</span>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 8px;">
+                        <div class="day-bar-badges">
                             ${isToday ? '<span class="today-accent-badge">Сегодня</span>' : ''}
-                            <span class="meta-pill" style="background: rgba(255,255,255,0.06); color: #cbd5e1;">
+                            <span class="meta-pill day-lesson-pill ${hasAnyLesson ? 'has-lessons' : ''}">
                                 ${hasAnyLesson ? '🟢 Есть конспекты' : '⚪ Пары по расписанию'}
                             </span>
                         </div>
                     </div>
-            `;
+                `;
 
-            if (day.classHour && (!filterSubj || filterSubj === 'all') && (!search || 'разговоры о важном'.includes(search))) {
-                html += `
+                if (day.classHour && (!filterSubj || filterSubj === 'all') && (!search || 'разговоры о важном'.includes(search))) {
+                    weekBody += `
                     <div class="class-hour-banner">
                         <div class="class-hour-left">
                             <span class="class-hour-tag">Внеурочно</span>
@@ -675,19 +794,19 @@ const app = {
                         </div>
                         <div class="class-hour-right">${day.classHour.teacher} · ${day.classHour.room}</div>
                     </div>
-                `;
-            }
+                    `;
+                }
 
-            html += `<div class="pairs-layout">`;
+                weekBody += `<div class="pairs-layout">`;
 
-            filteredPairs.forEach(pair => {
-                const color = this.getSubjectColor(pair.subject);
-                const hasLesson = pair.lesson !== null;
+                filteredPairs.forEach(pair => {
+                    const color = this.getSubjectColor(pair.subject);
+                    const hasLesson = pair.lesson !== null;
 
-                if (hasLesson) {
-                    const tagsHtml = (pair.lesson.tags || []).map(t => `<span class="tag-pill tag-${t}" style="font-size: 0.72rem; padding: 2px 8px;">#${t}</span>`).join('');
-                    html += `
-                        <div class="pair-box has-material" onclick="app.openLessonById('${pair.lesson.id}')">
+                    if (hasLesson) {
+                        const tagsHtml = (pair.lesson.tags || []).map(t => `<span class="tag-pill tag-${t}" style="font-size: 0.72rem; padding: 2px 8px;">#${t}</span>`).join('');
+                        weekBody += `
+                        <div class="pair-box has-material" style="--pair-accent: ${color};" onclick="app.openLessonById('${pair.lesson.id}')">
                             <div class="pair-glow-line" style="background: ${color};"></div>
                             <div class="pair-header-row">
                                 <span class="pair-index">${pair.num} ПАРА</span>
@@ -706,9 +825,9 @@ const app = {
                                 <span class="open-arrow">Открыть ➔</span>
                             </div>
                         </div>
-                    `;
-                } else {
-                    html += `
+                        `;
+                    } else {
+                        weekBody += `
                         <div class="pair-box no-material">
                             <div class="pair-header-row">
                                 <span class="pair-index">${pair.num} ПАРА</span>
@@ -726,14 +845,48 @@ const app = {
                                 <span style="font-size: 0.75rem; color: var(--text-muted);">по плану</span>
                             </div>
                         </div>
-                    `;
-                }
+                        `;
+                    }
+                });
+
+                weekBody += `</div></div>`;
             });
 
-            html += `</div></div>`;
+            if (!dayRendered) return;
+
+            anyWeekRendered = true;
+            html += `
+            <section class="week-group ${isCurrent ? 'is-current' : ''}" id="week-${weekKey}">
+                <div class="week-header">
+                    <div class="week-header-left">
+                        <span class="week-index">Неделя ${wi.week}</span>
+                        <span class="week-range">${this.formatWeekRange(start, new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6))}</span>
+                        <span class="week-status ${isCurrent ? 'current' : ''}">${statusText}</span>
+                    </div>
+                    <div class="week-header-right">
+                        <span class="week-lesson-count">
+                            <span class="count-dot"></span>
+                            ${weekLessonCount} ${this.pluralRu(weekLessonCount, 'конспект', 'конспекта', 'конспектов')}
+                        </span>
+                    </div>
+                </div>
+                ${weekBody}
+            </section>
+            `;
         });
 
         html += `</div>`;
+
+        if (!anyWeekRendered) {
+            html = `
+                <div class="schedule-empty fade-in">
+                    <div class="schedule-empty-icon">🔍</div>
+                    <h3>Ничего не найдено</h3>
+                    <p>Попробуйте изменить запрос или сбросить фильтры.</p>
+                </div>
+            `;
+        }
+
         this.dom.workspace.innerHTML = html;
     },
 
@@ -771,7 +924,7 @@ const app = {
             const color = this.getSubjectColor(l.subject);
             const tagsHtml = (l.tags || []).map(t => `<span class="tag-pill tag-${t}" style="font-size: 0.72rem; padding: 2px 8px;">#${t}</span>`).join('');
             html += `
-                <div class="pair-box has-material" onclick="app.openLessonById('${l.id}')">
+                <div class="pair-box has-material" style="--pair-accent: ${color};" onclick="app.openLessonById('${l.id}')">
                     <div class="pair-glow-line" style="background: ${color};"></div>
                     <div class="pair-header-row">
                         <span class="pair-index">${l.pairNumber ? l.pairNumber + ' ПАРА' : 'КОНСПЕКТ'}</span>
