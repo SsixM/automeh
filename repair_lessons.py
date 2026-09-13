@@ -19,17 +19,35 @@ BACKUP_FILE = ROOT / "lessons.js.bak"
 # Audio filenames in the generator use the real clock time. Thursday and Friday
 # have no first pair, therefore their visible schedule numbers start at 2.
 PAIR_OVERRIDES = {
-    "2026-09-03-info-intro": 3,       # 12:21, Informatics
-    "2026-09-03-chemistry-1": 2,      # 10:14, replacement lesson
-    "2026-09-04-history-3": 4,        # 14:01, History
-    "2026-09-09-родная-литература-входной-контроль": 3,  # 12:20, replacement lesson
-    "2026-09-11_history_3_1": 4,      # 14:10, History
+    "2026-09-03-info-intro": 3,
+    "2026-09-03-chemistry-1": 2,
+    "2026-09-04-history-3": 4,
+    "2026-09-09-родная-литература-входной-контроль": 3,
+    "2026-09-11_history_3_1": 4,
+    "2026-09-10-info-1": 3,
+    "2026-09-10-biology-pair1": 2,
+    "2026-09-08-p3-chemistry": 3,
+    "2026-09-08-intro-specialty": 1,
+    "russian-language-science-culture": 4,
+    "2026-09-07-math-1": 1,
+    "2026-09-09-unknown": 1,
+    "2026-09-08-pair-unknown": 1,
 }
 
 # 1 September is the first academic week, but the supplied timetable marks
 # 14 September as numerator and 13 September as denominator.
 NUMERATOR_WEEK_MONDAY = dt.date(2026, 9, 14)
 
+SUBJECT_OVERRIDES = {
+    "2026-09-10-info-1": "Информатика",
+    "2026-09-10-biology-pair1": "Биология",
+    "2026-09-08-p3-chemistry": "Химия",
+    "2026-09-08-intro-specialty": "Введение в специальность",
+    "russian-language-science-culture": "Русский язык",
+    "2026-09-07-math-1": "Математика",
+    "2026-09-09-unknown": "Русский язык",
+    "2026-09-08-pair-unknown": "Введение в специальность",
+}
 
 def week_type(value: str) -> str:
     date = dt.date.fromisoformat(value[:10])
@@ -89,9 +107,9 @@ def repair(lessons: list[dict]) -> tuple[list[dict], list[str]]:
             changes.append(f"{lesson_id}: pairNumber {lesson.get('pairNumber')} -> {PAIR_OVERRIDES[lesson_id]}")
             lesson["pairNumber"] = PAIR_OVERRIDES[lesson_id]
 
-        if lesson_id == "2026-09-10-info-1" and lesson.get("subject") != "Информатика":
-            changes.append(f"{lesson_id}: subject -> Информатика")
-            lesson["subject"] = "Информатика"
+        if lesson_id in SUBJECT_OVERRIDES and lesson.get("subject") != SUBJECT_OVERRIDES[lesson_id]:
+            changes.append(f"{lesson_id}: subject {lesson.get('subject')} -> {SUBJECT_OVERRIDES[lesson_id]}")
+            lesson["subject"] = SUBJECT_OVERRIDES[lesson_id]
 
         new_week_type = week_type(date)
         if lesson.get("weekType") != new_week_type:
