@@ -302,6 +302,27 @@ body {
 }
 .day-bar-title { font-size: 1.35rem; font-weight: 700; color: #fff; }
 .day-bar-meta { font-size: 0.85rem; color: var(--text-secondary); margin-left: 12px; font-weight: 500; }
+.week-type-badge {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 0.55rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+.week-type-numerator {
+    color: #c4b5fd;
+    background: rgba(139, 92, 246, 0.16);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+}
+.week-type-denominator {
+    color: #67e8f9;
+    background: rgba(6, 182, 212, 0.14);
+    border: 1px solid rgba(6, 182, 212, 0.3);
+}
 .day-bar-badges { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .day-lesson-pill { background: rgba(255, 255, 255, 0.06); color: #cbd5e1; }
 .day-lesson-pill.has-lessons { background: rgba(16, 185, 129, 0.12); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.3); }

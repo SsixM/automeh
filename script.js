@@ -38,18 +38,24 @@ const SCHEDULE_108M = [
         dayIndex: 3,
         dayName: 'Четверг',
         pairs: [
-            { num: 1, time: '08:30 – 10:00', subject: 'Биология', teacher: 'Кипрова', room: 'Л307' },
-            { num: 2, time: '10:10 – 12:00', subject: 'Информатика', teacher: 'Филенкова', room: '406' },
-            { num: 3, time: '12:20 – 13:50', subject: 'Информатика', teacher: 'Филенкова (2 подгр.) / История (1 подгр.)', room: '406 / 227' }
+            { num: 2, time: '10:10 – 12:00', subject: 'Биология', teacher: 'Кипрова', room: 'Л307' },
+            { num: 3, time: '12:20 – 13:50', subject: 'Информатика', teacher: 'Филенкова', room: '406' },
+            { num: 4, time: '14:00 – 15:30', weeks: {
+                numerator: { subject: 'История', teacher: 'Бятикова', room: '227' },
+                denominator: { subject: 'Информатика', teacher: 'Филенкова', room: '406' }
+            } }
         ]
     },
     {
         dayIndex: 4,
         dayName: 'Пятница',
         pairs: [
-            { num: 1, time: '08:30 – 10:00', subject: 'Математика', teacher: 'Кашаева', room: '2к302' },
-            { num: 2, time: '10:10 – 12:00', subject: 'Физическая культура', teacher: 'Федосеев', room: 'Спортзал' },
-            { num: 3, time: '12:20 – 13:50', subject: 'История', teacher: 'Бятикова', room: '227' }
+            { num: 2, time: '10:10 – 12:00', weeks: {
+                numerator: { subject: 'Физическая культура', teacher: 'Федосеев', room: 'Спортзал' },
+                denominator: { subject: 'Математика', teacher: 'Кашаева', room: '2к302' }
+            } },
+            { num: 3, time: '12:20 – 13:50', subject: 'Физическая культура', teacher: 'Солдатов', room: 'Спортзал' },
+            { num: 4, time: '14:00 – 15:30', subject: 'История', teacher: 'Бятикова', room: '227' }
         ]
     }
 ];
@@ -645,6 +651,29 @@ const app = {
         return this.getISOWeek(now);
     },
 
+    getWeekType(date) {
+        const value = this.parseDate(date);
+        const monday = new Date(value.getFullYear(), value.getMonth(), value.getDate() - value.getDay() + (value.getDay() === 0 ? -6 : 1));
+        const numeratorAnchor = new Date(2026, 8, 14);
+        const weeksFromAnchor = Math.round((monday - numeratorAnchor) / (7 * 24 * 3600 * 1000));
+        return Math.abs(weeksFromAnchor) % 2 === 0 ? 'numerator' : 'denominator';
+    },
+
+    getWeekTypeLabel(weekType) {
+        return weekType === 'numerator' ? 'Числитель' : 'Знаменатель';
+    },
+
+    resolvePairForDate(pair, date) {
+        const weekType = this.getWeekType(date);
+        const variant = pair.weeks && pair.weeks[weekType];
+        return {
+            ...pair,
+            ...(variant || {}),
+            weekType,
+            weekTypeLabel: this.getWeekTypeLabel(weekType)
+        };
+    },
+
     getWeekDelta(weekA, weekB) {
         const { start: aStart } = this.getWeekRange(weekA.year, weekA.week);
         const { start: bStart } = this.getWeekRange(weekB.year, weekB.week);
@@ -666,13 +695,19 @@ const app = {
         return many;
     },
 
-    findLessonForPair(pair, day) {
-        return this.data.find(l => {
-            const matchSubj = l.subject.toLowerCase() === pair.subject.toLowerCase();
+    findLessonForPair(pair, day, weekKey) {
+        const candidates = this.data.filter(l => {
             const matchDay = (l.dayIndex !== undefined && l.dayIndex === day.dayIndex);
             const matchPair = (!l.pairNumber || l.pairNumber === pair.num);
-            return matchSubj && matchDay && matchPair;
-        }) || null;
+            if (!matchDay || !matchPair) return false;
+            if (!weekKey || !l.date) return true;
+            const week = this.getISOWeek(this.parseDate(l.date));
+            return `${week.year}-W${week.week}` === weekKey;
+        });
+
+        return candidates.find(l => l.subject && l.subject.toLowerCase() === pair.subject.toLowerCase())
+            || candidates[0]
+            || null;
     },
 
     renderSchedule() {
@@ -688,10 +723,7 @@ const app = {
         // Шаблон расписания с привязанными конспектами
         const daysWithPairs = SCHEDULE_108M.map(day => ({
             ...day,
-            pairsData: day.pairs.map(pair => ({
-                ...pair,
-                lesson: this.findLessonForPair(pair, day)
-            }))
+            pairsData: day.pairs
         }));
 
         // Недели, в которых есть хотя бы один конспект
@@ -745,10 +777,20 @@ const app = {
             daysWithPairs.forEach(day => {
                 const dayDate = new Date(start.getFullYear(), start.getMonth(), start.getDate() + day.dayIndex);
                 const isToday = isCurrent && day.dayIndex === todayIndex;
-
-                const pairsData = day.pairsData.map(p => (
-                    p.lesson && weekKeyOf(p.lesson) !== weekKey ? { ...p, lesson: null } : p
-                ));
+                const pairsData = day.pairsData.map(pair => {
+                    const resolvedPair = this.resolvePairForDate(pair, dayDate);
+                    const lesson = this.findLessonForPair(resolvedPair, day, weekKey);
+                    const replacement = lesson && lesson.subject && lesson.subject !== 'Неопределённый предмет';
+                    return {
+                        ...resolvedPair,
+                        ...(replacement ? {
+                            subject: lesson.subject,
+                            teacher: lesson.teacher || resolvedPair.teacher,
+                            room: lesson.room || resolvedPair.room
+                        } : {}),
+                        lesson
+                    };
+                });
                 const hasAnyLesson = pairsData.some(p => p.lesson !== null);
 
                 const filteredPairs = pairsData.filter(p => {
@@ -775,6 +817,7 @@ const app = {
                         <div>
                             <span class="day-bar-title">${day.dayName}</span>
                             <span class="day-bar-meta">${dayDateFormatter.format(dayDate)}</span>
+                            <span class="week-type-badge week-type-${this.getWeekType(dayDate)}">${this.getWeekTypeLabel(this.getWeekType(dayDate))}</span>
                         </div>
                         <div class="day-bar-badges">
                             ${isToday ? '<span class="today-accent-badge">Сегодня</span>' : ''}
